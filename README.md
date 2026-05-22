@@ -1,127 +1,74 @@
-# EnergyCAP Pre-Export QA Tool
+# EnergyCAP Pre-Export QA Tool — v2.0
 
-A Streamlit application for quality-assuring EnergyCAP data before it is exported to feed an emissions calculation tool.
+A Streamlit app for quality-assuring EnergyCAP data and reconciling it with GEM (emissions calculation tool) before export.
 
-## What it does
-
-Ingests up to six EnergyCAP report exports, runs a comprehensive suite of QA checks, and produces:
-
-- **QA Summary Dashboard** — metrics and check-by-check results
-- **Risk Summary** — categorized risks with emissions impact descriptions
-- **Issue Register** — confirmed data problems requiring correction in EnergyCAP (filterable, downloadable)
-- **Risk Register** — records requiring human review before emissions calculation (filterable, downloadable)
-- **Data Explorer** — raw data browser for each uploaded report
+## What's new in v2.0
+- **Period detection** — auto-detects the date range in each uploaded file
+- **Overlap computation** — finds the overlapping window across all files and focuses all QA and reconciliation on that period
+- **Account start date checks** — flags accounts with missing or suspiciously old start dates, with a year-slider in the sidebar
+- **Non-monthly billing frequency flags** — flags quarterly/bi-monthly meters where GEM distributes bills equally across months
+- **GEM reconciliation tab** — full EnergyCAP ↔ GEM comparison with MWh conversion
+- **GEM estimate quality classification** — four-tier rating: Confirmed Bad / Structurally Unreliable / Suspect / Defensible
+- **GEM detail view** — row-level drill-down with filters by site, resource, estimate quality, and match tier
+- **Configurable unit conversion** — edit MWh conversion factors per commodity in the sidebar
 
 ## Supported Reports
 
-| Report | Name | Required |
-|--------|------|----------|
-| R-03 | Setup Report (Accounts / Vendors / Cost Centers / Meters / Sites) | ✅ Required |
-| R-11 | Bill Transfer Format (bill-level detail with native use + UOM) | ✅ Required |
-| R-13 | Bill Analysis (EnergyCAP outlier flags) | Optional |
-| R-19 | Monthly Utility Use and Cost | Optional |
-| R-21 | Monthly Comparison | Optional |
-| R-26 | Use and Cost Summary | Optional |
+| Report | Required | Description |
+|--------|----------|-------------|
+| R-03 | ✅ | Setup (Accounts / Meters / Sites) |
+| R-11 | ✅ | Bill Transfer Format (bill-level detail + UOM) |
+| R-13 | Optional | Bill Analysis (EnergyCAP outlier flags) |
+| R-19 | Optional | Monthly Utility Use and Cost |
+| R-21 | Optional | Monthly Comparison |
+| R-26 | Optional | Use and Cost Summary |
+| GEM  | Optional | GEM Emissions Data Export (enables reconciliation) |
 
-## QA Checks Performed
+## Tabs
 
-### Bill-Level Checks (R-11)
-| Check | Type | Emissions Impact |
-|-------|------|-----------------|
-| Missing Native Use | Issue | CRITICAL |
-| Missing Common Use / kBTU conversion | Risk | HIGH |
-| Negative Use Values | Issue | HIGH |
-| Duplicate Bill IDs | Issue | CRITICAL |
-| Missing Billing Periods (Gaps) | Issue | HIGH |
-| Overlapping Billing Periods | Issue | HIGH |
-| Unusual Billing Period Length (<5 or >95 days) | Risk | MEDIUM |
-| Zero Use with Non-Zero Cost | Risk | MEDIUM |
-| Non-Zero Use with Zero Cost | Risk | LOW |
-| Consecutive Zero-Use Months | Risk | MEDIUM |
-| Use Statistical Outliers (Z-score) | Risk | MEDIUM |
-| Cost Statistical Outliers (Z-score) | Risk | LOW |
-| Month-over-Month Use Change Spike | Risk | MEDIUM |
-| UOM / Rate Schedule Inconsistency | Risk | HIGH |
+| Tab | Contents |
+|-----|---------|
+| Upload & Run | File upload, period/overlap detection, run button |
+| EnergyCAP QA | EnergyCAP-only check results and summary |
+| GEM Reconciliation | EnergyCAP ↔ GEM summary, estimate quality, match coverage |
+| Risk Summary | Categorized risk explanations with emissions impact |
+| Issue Register | Filterable table of confirmed issues (downloadable) |
+| Risk Register | Filterable table of risks needing review (downloadable) |
+| GEM Detail | Row-level GEM ↔ EnergyCAP comparison (downloadable) |
+| Data Explorer | Raw data browser for each uploaded report |
 
-### Setup Checks (R-03)
-| Check | Type | Emissions Impact |
-|-------|------|-----------------|
-| Inactive Meters with Bills | Risk | HIGH |
-| Missing Serial Numbers | Risk | LOW |
-| Accounts Excluded from Audits | Risk | MEDIUM |
-| Deregulated Market Meters | Risk | HIGH |
-| Missing Acct-Meter Begin Dates | Issue | LOW |
-| Active Meters with No Bills | Issue | HIGH |
+## QA Checks (30 total)
 
-### Cross-Report Checks (R-03 × R-11)
-| Check | Type | Emissions Impact |
-|-------|------|-----------------|
-| Orphan Bills (meter in R-11 not in R-03) | Issue | HIGH |
+### Bill-Level (R-11)
+Missing Native Use, Missing kBTU Conversion, Negative Use, Duplicate Bills, Billing Period Gaps, Overlapping Bills, Unusual Period Length, Zero Use/Non-Zero Cost, Non-Zero Use/Zero Cost, Consecutive Zero-Use Months, Use Outliers, Cost Outliers, MoM % Change, UOM Inconsistency
+
+### Setup (R-03)
+Inactive Meters with Bills, Missing Serial Numbers, Excluded from Audits, Deregulated Market, Missing Acct-Meter Begin Dates, Suspicious Account Start Date, Non-Monthly Billing Frequency, Active Meters with No Bills
+
+### Cross-Report
+Orphan Bills (meter in R-11 not in R-03)
+
+### GEM Reconciliation
+Bills Missing from GEM, GEM Over-reports (>20%), GEM Under-reports (>20%), Confirmed Bad Estimates, Structurally Unreliable Estimates, Suspect Estimates (Seasonal), Unmatched SANs
 
 ## Setup
 
-### 1. Clone the repository
 ```bash
 git clone https://github.com/your-org/energycap-qa-tool.git
 cd energycap-qa-tool
-```
-
-### 2. Install dependencies
-```bash
 pip install -r requirements.txt
-```
-
-### 3. Run the app
-```bash
 streamlit run app.py
 ```
 
-The app will open at `http://localhost:8501`
+## GEM Estimate Quality Classification
 
-## Usage
+| Classification | Trigger | Severity |
+|---------------|---------|---------|
+| Confirmed Bad | Before account start date, or no start date | Issue |
+| Structurally Unreliable | Non-monthly meter, equal-split pattern | Risk |
+| Suspect | Seasonal/event-driven commodity (diesel, propane, etc.) | Risk |
+| Defensible | Steady-state commodity filling a bill gap | Info |
 
-1. **Upload** your EnergyCAP Excel exports in the **Upload & Run** tab
-   - The tool auto-detects report types from filename and column headers
-   - Upload R-03 and R-11 at minimum; add R-13, R-19, R-21, R-26 for deeper analysis
-
-2. **Configure** QA thresholds in the left sidebar:
-   - Outlier Z-score threshold (default: 2.5)
-   - Month-over-month % change alert (default: 50%)
-   - Consecutive zero-use months to flag (default: 2)
-
-3. **Click "Run QA Reconciliation"** — processing happens in seconds
-
-4. **Review results** across the tabs:
-   - QA Summary for the overall picture
-   - Risk Summary for detailed risk explanations
-   - Issue Register for records needing correction
-   - Risk Register for records needing review
-
-5. **Download** the Issue Register and Risk Register as CSV for tracking and remediation
-
-## File Structure
-
-```
-energycap-qa-tool/
-├── app.py              # Streamlit UI
-├── qa_engine.py        # All QA check logic
-├── utils.py            # Report loading, type detection, helpers
-├── requirements.txt    # Python dependencies
-└── README.md
-```
-
-## Report Naming Tips
-
-The tool detects report types from filename hints. Name your exports to include the report number:
-- `Report-03-Setup.xlsx` → detected as R-03
-- `Report-11-Bills.xlsx` → detected as R-11
-- `energycap_r19_monthly.xlsx` → detected as R-19
-
-If detection fails, the tool will warn you and you can rename the file.
-
-## Notes
-
-- Date columns in EnergyCAP exports are Excel serial numbers — the tool converts these automatically
-- R-11's `Native Use` column has no UOM label; commodity type is used as a proxy
-- The tool does not modify any source data — it is read-only
-- All processing happens locally; no data is sent externally
+## File Naming Tips
+The tool auto-detects report types from filenames. Name exports to include:
+`Report-03`, `Report-11`, `GEM`, `emissions_matrix`, `energy_quantities`
